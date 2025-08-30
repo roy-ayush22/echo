@@ -1,21 +1,37 @@
 import { WebSocketServer } from "ws";
-// import { ChatMessage, ClientMessage } from "../interface/interface";
 
 const wss = new WebSocketServer({ port: 8080 });
-const client = new Set<any>();
+const client = new Map();
+const socketToUserId = new Map();
+let userIdCounter = 1;
 
 wss.on("connection", (socket) => {
-  client.add(socket);
-  console.log(`client connected, total clients: ${client.size}`);
+  const userId = `user_${userIdCounter++}`;
+
+  client.set(userId, socket);
+  socketToUserId.set(socket, userId);
+
+  console.log(`${userId} connected, total client: ${client.size}`);
 
   socket.on("message", (data) => {
-    console.log(data.toString());
+    console.log(`message from ${userId}: ${data.toString()}`);
   });
 
-  socket.send("message from server");
+  socket.send(`welcome ${userId}.`);
 
   socket.on("close", () => {
-    client.delete(socket);
-    console.log(`client disconnected!`);
+    const disconnectUserId = socketToUserId.get(socket);
+
+    client.delete(disconnectUserId);
+    socketToUserId.delete(socket);
+    console.log(`${disconnectUserId} disconnected!`);
+
+    const broadcastToAll = (message: string) => {
+      client.forEach((socket) => {
+        socket.send(`server: ${message}`);
+      });
+    };
+
+    broadcastToAll(`${disconnectUserId} left the chat`);
   });
 });
