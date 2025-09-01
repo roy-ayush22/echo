@@ -1,12 +1,13 @@
 import { WebSocketServer } from "ws";
+import { v4 as uuidv4 } from "uuid";
 
 const wss = new WebSocketServer({ port: 8080 });
 const client = new Map();
 const socketToUserId = new Map();
-let userIdCounter = 1;
 
 wss.on("connection", (socket) => {
-  const userId = `user_${userIdCounter++}`;
+  const id = uuidv4();
+  const userId = Buffer.from(id).toString("base64").slice(0, 12);
 
   client.set(userId, socket);
   socketToUserId.set(socket, userId);
