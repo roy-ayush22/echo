@@ -4,10 +4,16 @@ import { v4 as uuidv4 } from "uuid";
 const wss = new WebSocketServer({ port: 8080 });
 const client = new Map();
 const socketToUserId = new Map();
+let userIdCounter = 1;
+
+const broadcastToAll = (message: string) => {
+  client.forEach((socket) => {
+    socket.send(`server: ${message}`);
+  });
+};
 
 wss.on("connection", (socket) => {
-  const id = uuidv4();
-  const userId = Buffer.from(id).toString("base64").slice(0, 12);
+  const userId = `user ${userIdCounter++}`;
 
   client.set(userId, socket);
   socketToUserId.set(socket, userId);
@@ -15,7 +21,28 @@ wss.on("connection", (socket) => {
   console.log(`${userId} connected, total client: ${client.size}`);
 
   socket.on("message", (data) => {
-    console.log(`message from ${userId}: ${data.toString()}`);
+    try {
+      const message = JSON.parse(data.toString());
+
+      client.forEach((clientSocket, clientUserId) => {
+        if (clientSocket !== socket) {
+          clientSocket.send(
+            JSON.stringify({
+              type: "chat",
+              userId: userId,
+              message: message.content,
+              timestamp: new Date().toISOString(),
+            })
+          );
+        }
+      });
+    } catch (error) {
+      client.forEach((clientSocket, clientUserId) => {
+        if (clientSocket !== socket) {
+          clientSocket.send(`${userId}: ${data.toString()}`);
+        }
+      });
+    }
   });
 
   socket.send(`welcome ${userId}.`);
@@ -26,12 +53,6 @@ wss.on("connection", (socket) => {
     client.delete(disconnectUserId);
     socketToUserId.delete(socket);
     console.log(`${disconnectUserId} disconnected!`);
-
-    const broadcastToAll = (message: string) => {
-      client.forEach((socket) => {
-        socket.send(`server: ${message}`);
-      });
-    };
 
     broadcastToAll(`${disconnectUserId} left the chat`);
   });
