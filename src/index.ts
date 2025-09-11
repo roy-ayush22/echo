@@ -1,59 +1,67 @@
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 import { v4 as uuidv4 } from "uuid";
+import { User, ChatMessage, Room } from "./interface/interface";
 
 const wss = new WebSocketServer({ port: 8080 });
-const client = new Map();
-const socketToUserId = new Map();
-let userIdCounter = 1;
+const users = new Map<string, User>();
+const rooms = new Map<string, Room>();
+const socketToUserId = new Map<WebSocket, Room>();
+const userTyping = new Map<string, NodeJS.Timeout>();
 
-const broadcastToAll = (message: string) => {
-  client.forEach((socket) => {
-    socket.send(`server: ${message}`);
+// creating a default room object
+const defaultRoom: Room = {
+  id: "general",
+  name: "General",
+  users: new Set(),
+  messageHistory: [],
+  createdAt: new Date(),
+};
+rooms.set("general", defaultRoom);
+
+const broadcastToAll = (
+  roomId: string,
+  message: ChatMessage,
+  excludeUserId?: string
+) => {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  room.users.forEach((userId) => {
+    if (userId !== excludeUserId) {
+      const user = users.get(userId);
+      if (user && user.socket.readyState === WebSocket.OPEN) {
+        user.socket.send(JSON.stringify(message));
+      }
+    }
   });
 };
 
-wss.on("connection", (socket) => {
-  const userId = `user ${userIdCounter++}`;
+const addMessageHistory = (roomId: string, message: ChatMessage) => {
+  const room = rooms.get(roomId);
+  if (!room) return;
 
-  client.set(userId, socket);
-  socketToUserId.set(socket, userId);
+  room.messageHistory.push(message);
+  if (room?.messageHistory.length > 100) {
+    room.messageHistory = room?.messageHistory.slice(-100);
+  }
+};
 
-  console.log(`${userId} connected, total client: ${client.size}`);
+const getUserList = (roomId: string): string[] => {
+  const room = rooms.get(roomId);
+  if (!room) return [];
 
-  socket.on("message", (data) => {
-    try {
-      const message = JSON.parse(data.toString());
-
-      client.forEach((clientSocket, clientUserId) => {
-        if (clientSocket !== socket) {
-          clientSocket.send(
-            JSON.stringify({
-              type: "chat",
-              userId: userId,
-              message: message.content,
-              timestamp: new Date().toISOString(),
-            })
-          );
-        }
-      });
-    } catch (error) {
-      client.forEach((clientSocket, clientUserId) => {
-        if (clientSocket !== socket) {
-          clientSocket.send(`${userId}: ${data.toString()}`);
-        }
-      });
-    }
+  return Array.from(room.users).map((userId) => {
+    const user = users.get(userId);
+    return user ? user.username : "unknown";
   });
+};
 
-  socket.send(`welcome ${userId}.`);
-
-  socket.on("close", () => {
-    const disconnectUserId = socketToUserId.get(socket);
-
-    client.delete(disconnectUserId);
-    socketToUserId.delete(socket);
-    console.log(`${disconnectUserId} disconnected!`);
-
-    broadcastToAll(`${disconnectUserId} left the chat`);
-  });
-});
+const sendUserList = (roomId: string) => {
+  const userList = getUserList(roomId);
+  const message: ChatMessage = {
+    type: "user_list",
+    users: userList,
+    timestamp: new Date().toISOString(),
+  };
+  broadcastToAll(roomId, message);
+};
