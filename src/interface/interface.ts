@@ -1,12 +1,14 @@
+import { WebSocket } from "ws"
+
 export interface User {
   id: string;
   username: string;
-  socket: WebSocket;
+  socket: WebSocket ;
   joinedAt: Date;
 }
 
 export interface ChatMessage {
-  type: "chat" | "user_joined" | "user_left" | "users" | "typing" | "user_list";
+  type: "chat" | "user_joined" | "user_left" | "users" | "typing" | "user_list" | 'stop_typing';
   userId?: string;
   username?: string;
   message?: string;

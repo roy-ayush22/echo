@@ -5,7 +5,7 @@ import { User, ChatMessage, Room } from "./interface/interface";
 const wss = new WebSocketServer({ port: 8080 });
 const users = new Map<string, User>();
 const rooms = new Map<string, Room>();
-const socketToUserId = new Map<WebSocket, Room>();
+const socketToUserId = new Map<WebSocket, string>();
 const userTyping = new Map<string, NodeJS.Timeout>();
 
 // creating a default room object
@@ -18,7 +18,7 @@ const defaultRoom: Room = {
 };
 rooms.set("general", defaultRoom);
 
-const broadcastToAll = (
+const broadcastToRoom = (
   roomId: string,
   message: ChatMessage,
   excludeUserId?: string
@@ -63,5 +63,84 @@ const sendUserList = (roomId: string) => {
     users: userList,
     timestamp: new Date().toISOString(),
   };
-  broadcastToAll(roomId, message);
+  broadcastToRoom(roomId, message);
 };
+
+const handleTyping = (userId: string, roomId: string, isTyping: boolean) => {
+  const user = users.get(userId);
+  if (!user) return;
+
+  if (isTyping) {
+    const existingTimeout = userTyping.get(userId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+    const message: ChatMessage = {
+      type: "typing",
+      userId,
+      username: user.username,
+      timestamp: new Date().toISOString(),
+    };
+    broadcastToRoom(roomId, message, userId);
+
+    const timeout = setTimeout(() => {
+      const stopMessage: ChatMessage = {
+        type: "stop_typing",
+        userId,
+        username: user.username,
+        timestamp: new Date().toISOString(),
+      };
+      broadcastToRoom(roomId, stopMessage, userId);
+      userTyping.delete(userId);
+    }, 3000);
+    userTyping.set(userId, timeout);
+  } else {
+    // Clear timeout and broadcast stop typing
+    const existingTimeout = userTyping.get(userId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      userTyping.delete(userId);
+    }
+
+    const message: ChatMessage = {
+      type: "stop_typing",
+      userId,
+      username: user.username,
+      timestamp: new Date().toISOString(),
+    };
+    broadcastToRoom(roomId, message, userId);
+  }
+};
+
+wss.on("connection", (socket) => {
+  console.log("new client connected..");
+
+  let user: User | null = null;
+  let currentRoom = "general";
+
+  socket.on("message", (data) => {
+    const parsedMessage = JSON.parse(data.toString());
+
+    if (parsedMessage.type == "join" && !user) {
+      const username = parsedMessage.user || `User${Date.now()}`;
+      const userId = uuidv4();
+
+      user = {
+        id: userId,
+        username,
+        socket,
+        joinedAt: new Date(),
+      };
+
+      users.set(userId, user);
+      socketToUserId.set(socket, userId);
+
+      const room = rooms.get(currentRoom);
+      if (room) {
+        room.users.add(userId);
+      }
+
+      console.log(`${username} (${userId}) joined the room ${currentRoom}`);
+    }
+  });
+});
