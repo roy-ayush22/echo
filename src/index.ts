@@ -36,7 +36,7 @@ const broadcastToRoom = (
   });
 };
 
-const addMessageHistory = (roomId: string, message: ChatMessage) => {
+const addMessageToHistory = (roomId: string, message: ChatMessage) => {
   const room = rooms.get(roomId);
   if (!room) return;
 
@@ -141,6 +141,116 @@ wss.on("connection", (socket) => {
       }
 
       console.log(`${username} (${userId}) joined the room ${currentRoom}`);
+
+      const welcomeMessage: ChatMessage = {
+        type: "system",
+        message: `welcome to the chat, ${username}`,
+        timestamp: new Date().toISOString(),
+      };
+      socket.send(JSON.stringify(welcomeMessage));
+
+      if (room && room.messageHistory.length > 0) {
+        room.messageHistory.forEach((msg) => {
+          socket.send(JSON.stringify(msg));
+        });
+      }
+
+      const joinMessage: ChatMessage = {
+        type: "user_joined",
+        userId,
+        username,
+        message: `${username} joined the chat`,
+        timestamp: new Date().toISOString(),
+      };
+      broadcastToRoom(currentRoom, joinMessage, userId);
+      addMessageToHistory(currentRoom, joinMessage);
+      sendUserList(currentRoom);
+      return;
     }
+    if (!user) {
+      socket.send(
+        JSON.stringify({
+          type: "error",
+          message: "please join with a username",
+        })
+      );
+      return;
+    }
+    switch (parsedMessage.type) {
+      case "chat":
+        const chatMessage: ChatMessage = {
+          type: "chat",
+          userId: user.id,
+          username: user.username,
+          message: parsedMessage.message,
+          timestamp: new Date().toISOString(),
+        };
+
+        broadcastToRoom(currentRoom, chatMessage, user.id);
+        addMessageToHistory(currentRoom, chatMessage);
+        break;
+
+      case "typing":
+        handleTyping(user.id, currentRoom, parsedMessage.isTyping);
+        break;
+
+      case "ping":
+        socket.send(
+          JSON.stringify({
+            type: "pong",
+            timestamp: new Date().toISOString(),
+          })
+        );
+        break;
+
+      default:
+        console.log("Unknown message type:", parsedMessage.type);
+    }
+    socket.on("close", () => {
+      if (!user) return;
+
+      const userId = user.id;
+      const username = user.username;
+
+      const room = rooms.get(currentRoom);
+      if (room) {
+        room.users.delete(userId);
+      }
+      const typingTimeout = userTyping.get(userId);
+      if (typingTimeout) {
+        clearInterval(typingTimeout);
+        userTyping.delete(userId);
+      }
+      users.delete(userId);
+      socketToUserId.delete(socket);
+
+      console.log(`${username} disconnected from room ${currentRoom}`);
+      const leaveMessage: ChatMessage = {
+        type: "user_left",
+        userId,
+        username,
+        message: `${username} has left the chat`,
+        timestamp: new Date().toISOString(),
+      };
+      broadcastToRoom(currentRoom, leaveMessage);
+      addMessageToHistory(currentRoom, leaveMessage);
+      sendUserList(currentRoom);
+    });
+    socket.on("error", (error) => {
+      console.error("websocket error: ", error);
+    });
+  });
+
+  const heartbeat = setInterval(() => {
+    wss.clients.forEach((socket) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.ping();
+      }
+    });
+  }, 30000);
+
+  process.on("SIGTERM", () => {
+    clearInterval(heartbeat);
+    wss.close();
   });
 });

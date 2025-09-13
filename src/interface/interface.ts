@@ -8,7 +8,7 @@ export interface User {
 }
 
 export interface ChatMessage {
-  type: "chat" | "user_joined" | "user_left" | "users" | "typing" | "user_list" | 'stop_typing';
+  type: 'chat' | 'user_joined' | 'user_left' | 'users' | 'typing' | 'user_list' | 'stop_typing' | 'system';
   userId?: string;
   username?: string;
   message?: string;
