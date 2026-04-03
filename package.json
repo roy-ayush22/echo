@@ -1,25 +1,32 @@
 {
-  "name": "websocket",
+  "name": "websockets",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "npx tsc && node dist/index.js",
-    "nodemon": "nodemon --watch src --exec 'npx tsc && node dist/index.js'"
+    "nodemon": "nodemon --exec tsx src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roy-ayush22/websockets.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/roy-ayush22/websockets/issues"
+  },
+  "homepage": "https://github.com/roy-ayush22/websockets#readme",
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  },
   "dependencies": {
     "@types/ws": "^8.18.1",
-    "http-server": "^14.1.1",
-    "typescript": "^5.9.2",
-    "uuid": "^11.1.0",
-    "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "@types/node": "^24.2.1"
+    "nodemon": "^3.1.14",
+    "ws": "^8.20.0"
   }
 }
