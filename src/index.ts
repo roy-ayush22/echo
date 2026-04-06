@@ -11,10 +11,27 @@ interface Client {
 const rooms: Map<string, Set<string>> = new Map();
 const clients: Map<string, Client> = new Map();
 
+// generate a random id
 const generateId = () => {
   return Math.random().toString(36).substring(2, 7);
 };
 
+// broadcast message to a specific room
+const broadcastToRoom = (
+  roomName: string,
+  message: string,
+  excludeId?: string,
+) => {
+  for (const clientId of rooms.get(roomName)!) {
+    if (clientId == excludeId) continue;
+    const member = clients.get(clientId);
+    if (member && member.socket.readyState === WebSocket.OPEN) {
+      member.socket.send(message);
+    }
+  }
+};
+
+// broadcast message to all the users
 const broadcast = (message: string, excludeId?: string) => {
   for (const [id, client] of clients) {
     if (id == excludeId) continue;
@@ -30,14 +47,15 @@ wss.on("connection", (socket: WebSocket) => {
   clients.set(id, client);
   console.log(`${id} connected!`);
 
+  // sends message to user after joining the chat
   socket.send(
     JSON.stringify({
       type: "welcome",
-      id: id,
-      message: `hello, your id: ${id}`,
+      message: `hello, your id is: ${id}`,
     }),
   );
 
+  // broadcast message that a user with id has joined the chat
   broadcast(
     JSON.stringify({
       type: "user_joined",
@@ -70,6 +88,8 @@ wss.on("connection", (socket: WebSocket) => {
 
     switch (parsedData.type) {
       case "join": {
+        if (client?.roomId === null) break;
+
         if (!parsedData.roomName) {
           socket.send(
             JSON.stringify({
@@ -86,8 +106,10 @@ wss.on("connection", (socket: WebSocket) => {
         }
 
         rooms.get(roomName)!.add(id);
+
         // const client = clients.get(id);
-        client.roomId = roomName;
+
+        if (!client) return;
 
         socket.send(
           JSON.stringify({
@@ -97,19 +119,16 @@ wss.on("connection", (socket: WebSocket) => {
           }),
         );
 
-        for (const clientId of rooms.get(roomName)!) {
-          if (clientId === id) continue;
-          const member = clients.get(clientId);
-          if (member && member.socket.readyState === WebSocket.OPEN) {
-            member.socket.send(
-              JSON.stringify({
-                type: "user_joined",
-                from: id,
-                message: `${id} has joined the ${roomName} room`,
-              }),
-            );
-          }
-        }
+        broadcastToRoom(
+          roomName,
+          JSON.stringify({
+            type: "user_joined",
+            from: id,
+            message: `${id} has joined the ${roomName} room`,
+          }),
+          id,
+        );
+        break;
       }
     }
   });
