@@ -3,8 +3,26 @@ import type { ClientMessage, ServerMessage } from "./types.js";
 
 const wss = new WebSocketServer({ port: 5050 });
 
-wss.on("connection", (socket: WebSocket) => {
+interface ExtendedWebSocket extends WebSocket {
+  isAlive: boolean;
+}
+
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    const socket = ws as ExtendedWebSocket;
+    if (!socket.isAlive) {
+      console.log("terminating dead connection");
+      socket.terminate();
+      return;
+    }
+    socket.isAlive = false;
+  });
+}, 5000);
+
+wss.on("connection", (socket: ExtendedWebSocket) => {
   console.log("user connected");
+  // console.log(wss.clients);
+  socket.isAlive = true;
 
   socket.on("message", (data) => {
     try {
@@ -18,7 +36,18 @@ wss.on("connection", (socket: WebSocket) => {
           },
         };
         socket.send(JSON.stringify(response));
-      } 
+      } else if (message.type === "ping") {
+        socket.isAlive = true;
+
+        const response: ServerMessage = {
+          type: "pong_response",
+          payload: {
+            message: "pong",
+            time: Date.now(),
+          },
+        };
+        socket.send(JSON.stringify(response));
+      }
     } catch {
       const responseMessage: ServerMessage = {
         type: "echo_error",
@@ -26,6 +55,11 @@ wss.on("connection", (socket: WebSocket) => {
           message: "invalid message format",
         },
       };
+      socket.send(JSON.stringify(responseMessage));
     }
+  });
+
+  socket.on("close", () => {
+    console.log("user left");
   });
 });
