@@ -1,28 +1,15 @@
+import dotenv from "dotenv";
+dotenv.config();
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "./types.js";
+import connectDb from "./db/db.js";
 
+connectDb();
 const wss = new WebSocketServer({ port: 5050 });
 
-interface ExtendedWebSocket extends WebSocket {
-  isAlive: boolean;
-}
-
-setInterval(() => {
-  wss.clients.forEach((ws) => {
-    const socket = ws as ExtendedWebSocket;
-    if (!socket.isAlive) {
-      console.log("terminating dead connection");
-      socket.terminate();
-      return;
-    }
-    socket.isAlive = false;
-  });
-}, 5000);
-
-wss.on("connection", (socket: ExtendedWebSocket) => {
+wss.on("connection", (socket) => {
   console.log("user connected");
   // console.log(wss.clients);
-  socket.isAlive = true;
 
   socket.on("message", (data) => {
     try {
@@ -37,8 +24,6 @@ wss.on("connection", (socket: ExtendedWebSocket) => {
         };
         socket.send(JSON.stringify(response));
       } else if (message.type === "ping") {
-        socket.isAlive = true;
-
         const response: ServerMessage = {
           type: "pong_response",
           payload: {
