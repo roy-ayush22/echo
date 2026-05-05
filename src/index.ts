@@ -2,9 +2,9 @@ import dotenv from "dotenv";
 dotenv.config();
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "./types.js";
-import connectDb from "./db/db.js";
+// import connectDb from "./db/db.js";
 
-connectDb();
+// connectDb();
 const wss = new WebSocketServer({ port: 5050 });
 
 wss.on("connection", (socket) => {
@@ -14,24 +14,38 @@ wss.on("connection", (socket) => {
   socket.on("message", (data) => {
     try {
       const message: ClientMessage = JSON.parse(data.toString());
-      if (message.type === "echo") {
-        const response: ServerMessage = {
-          type: "echo_respond",
-          payload: {
-            message: message.payload.message,
-            time: Date.now(),
-          },
-        };
-        socket.send(JSON.stringify(response));
-      } else if (message.type === "ping") {
-        const response: ServerMessage = {
-          type: "pong_response",
-          payload: {
-            message: "pong",
-            time: Date.now(),
-          },
-        };
-        socket.send(JSON.stringify(response));
+      switch (message.type) {
+        case "echo": {
+          const response: ServerMessage = {
+            type: "echo_respond",
+            payload: {
+              message: message.payload.message,
+              time: Date.now(),
+            },
+          };
+          socket.send(JSON.stringify(response));
+          break;
+        }
+        case "ping": {
+          const response: ServerMessage = {
+            type: "pong_response",
+            payload: {
+              message: "pong",
+              time: Date.now(),
+            },
+          };
+          socket.send(JSON.stringify(response));
+          break;
+        }
+        case "message": {
+          const response: ServerMessage = {
+            type: "message_response",
+            payload: {
+              message: "message received",
+            },
+          };
+          socket.send(JSON.stringify(response));
+        }
       }
     } catch {
       const responseMessage: ServerMessage = {
