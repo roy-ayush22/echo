@@ -116,6 +116,33 @@ wss.on("connection", (socket) => {
           broadcastToRoom(roomId, response, socket);
           break;
         }
+        case "room_message": {
+          const client = clients.get(socket);
+          if (!client) break;
+
+          if (client.currentRoom === null) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                payload: {
+                  message: "you are not in the room",
+                },
+              }),
+            );
+            break;
+          }
+          const response: ServerMessage = {
+            type: "room_message_response",
+            payload: {
+              from: client.username,
+              message: message.payload.message,
+            },
+          };
+          broadcastToRoom(client.currentRoom, response, socket);
+          break;
+        }
+        case "leave_room": {
+        }
       }
     } catch {
       const responseMessage: ServerMessage = {
