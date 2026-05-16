@@ -9,7 +9,19 @@ const wss = new WebSocketServer({ port: 5050 });
 
 const rooms = new Map<string, Set<WebSocket>>();
 
-const broadcastToAll = (response: ServerMessage, excludeSocket: WebSocket) => {
+interface Client {
+  socket: WebSocket;
+  username: string;
+  currentRoom: string | null;
+}
+
+const clients = new Map<WebSocket, Client>();
+
+const randomUsername = () => {
+  return `user_${Math.random().toString(36).substring(2, 8)}`;
+};
+
+const broadcastToAll = (response: ServerMessage, excludeSocket?: WebSocket) => {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN && client !== excludeSocket) {
       client.send(JSON.stringify(response));
@@ -20,7 +32,7 @@ const broadcastToAll = (response: ServerMessage, excludeSocket: WebSocket) => {
 const broadcastToRoom = (
   roomId: string,
   response: ServerMessage,
-  excludeSocket: WebSocket,
+  excludeSocket?: WebSocket,
 ) => {
   const room = rooms.get(roomId);
   if (!room) return;
@@ -32,8 +44,9 @@ const broadcastToRoom = (
 };
 
 wss.on("connection", (socket) => {
+  const username = randomUsername();
+  clients.set(socket, { socket, username, currentRoom: null });
   console.log("user connected");
-  // console.log(wss.clients);
 
   socket.on("message", (data) => {
     try {
@@ -47,7 +60,7 @@ wss.on("connection", (socket) => {
               message: message.payload.message,
             },
           };
-          socket.send(JSON.stringify(response));
+          broadcastToAll(response);
           break;
         }
 
@@ -58,7 +71,7 @@ wss.on("connection", (socket) => {
               message: "pong",
             },
           };
-          socket.send(JSON.stringify(response));
+          broadcastToAll(response);
           break;
         }
         case "message": {
@@ -68,20 +81,39 @@ wss.on("connection", (socket) => {
               message: message.payload.message,
             },
           };
-          wss.clients.forEach((clients) => {
-            if (clients.readyState === WebSocket.OPEN && clients !== socket) {
-              clients.send(JSON.stringify(response));
-            }
-          });
+
+          broadcastToAll(response, socket);
           break;
         }
         case "join_room": {
           const { roomId } = message.payload;
+          const client = clients.get(socket);
+          if (!client) break;
+
+          if (client.currentRoom !== null) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                payload: {
+                  message: "leave your current room first",
+                },
+              }),
+            );
+            break;
+          }
           if (!rooms.has(roomId)) {
             rooms.set(roomId, new Set([socket]));
           } else {
             rooms.get(roomId)!.add(socket);
           }
+          const response: ServerMessage = {
+            type: "new_message",
+            payload: {
+              message: `${client.username} has joined the room:${roomId}`,
+            },
+          };
+          client.currentRoom = roomId;
+          broadcastToRoom(roomId, response, socket);
           break;
         }
       }
@@ -97,6 +129,7 @@ wss.on("connection", (socket) => {
   });
 
   socket.on("close", () => {
+    clients.delete(socket);
     console.log("user left");
   });
 });
