@@ -60,7 +60,7 @@ wss.on("connection", (socket) => {
               message: message.payload.message,
             },
           };
-          broadcastToAll(response);
+          socket.send(JSON.stringify(response));
           break;
         }
 
@@ -71,7 +71,7 @@ wss.on("connection", (socket) => {
               message: "pong",
             },
           };
-          broadcastToAll(response);
+          socket.send(JSON.stringify(response));
           break;
         }
         case "message": {
@@ -142,7 +142,8 @@ wss.on("connection", (socket) => {
           break;
         }
         case "leave_room": {
-        }
+        } default:
+          
       }
     } catch {
       const responseMessage: ServerMessage = {
