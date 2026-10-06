@@ -2,9 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "./types.js";
-// import connectDb from "./db/db.js";
 
-// connectDb();
 const wss = new WebSocketServer({ port: 5050 });
 
 const rooms = new Map<string, Set<WebSocket>>();
@@ -43,7 +41,7 @@ const broadcastToRoom = (
   });
 };
 
-wss.on("connection", (socket) => {
+wss.on("connection", async (socket) => {
   const username = randomUsername();
   clients.set(socket, { socket, username, currentRoom: null });
   console.log("user connected");
@@ -142,8 +140,8 @@ wss.on("connection", (socket) => {
           break;
         }
         case "leave_room": {
-        } default:
-          
+        }
+        default:
       }
     } catch {
       const responseMessage: ServerMessage = {
